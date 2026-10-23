@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>일본 여행 기록 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --red:#e53935; --ink:#202124; --muted:#70757a; --line:#e5e7eb; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#f7f7f8; color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { padding:calc(14px + env(safe-area-inset-top)) 16px 12px; background:#fff; border-bottom:1px solid var(--line); }
+  h1 { font-size:22px; margin:0 0 5px; letter-spacing:-.5px; }
+  .subtitle { font-size:13px; color:var(--muted); }
+  main { max-width:900px; margin:0 auto; padding:12px; }
+  .stats { display:flex; gap:10px; align-items:center; justify-content:space-between; background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
+  .count { font-size:20px; font-weight:750; color:var(--red); }
+  .small { font-size:12px; color:var(--muted); }
+  .progress { height:5px; background:#eee; border-radius:99px; overflow:hidden; margin-top:7px; }
+  .progress > div { height:100%; width:0; background:var(--red); transition:width .2s; }
+  #map { height:min(63vh,620px); min-height:370px; background:#eaf2f5; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .map-note { display:flex; align-items:center; gap:12px; padding:9px 3px 12px; font-size:12px; color:var(--muted); flex-wrap:wrap; }
+  .dot { display:inline-block; width:12px; height:12px; border:1px solid #999; border-radius:3px; vertical-align:-2px; margin-right:4px; }
+  .dot.white { background:#fff; } .dot.red { background:var(--red); border-color:#c62828; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:14px; padding:13px; margin-top:10px; }
+  .selected-name { font-weight:700; font-size:17px; }
+  .selected-sub { font-size:13px; color:var(--muted); margin-top:3px; }
+  .actions { display:flex; gap:8px; margin-top:12px; }
+  button { border:0; border-radius:10px; padding:11px 13px; font-size:14px; font-weight:650; cursor:pointer; }
+  #toggle { flex:1; background:var(--red); color:#fff; }
+  #reset { background:#f0f1f2; color:#333; }
+  #visitedList { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip { border:1px solid #f0c5c4; color:#a92320; background:#fff4f3; border-radius:999px; padding:6px 9px; font-size:12px; }
+  .empty { color:var(--muted); font-size:13px; }
+  footer { text-align:center; color:var(--muted); font-size:11px; padding:18px 10px calc(18px + env(safe-area-inset-bottom)); line-height:1.6; }
+  .leaflet-container { font:inherit; }
+  .leaflet-tooltip.pref-label { background:#fff; border:1px solid #bbb; color:#222; box-shadow:0 1px 4px #0002; border-radius:7px; font-weight:650; padding:5px 7px; white-space:nowrap; }
+  .leaflet-tooltip.pref-label:before { display:none; }
+  .error { background:#fff2f0; border:1px solid #ffd2cc; color:#9c261e; padding:12px; border-radius:10px; font-size:13px; line-height:1.5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🇯🇵 일본 여행 기록 지도</h1>
+  <div class="subtitle">방문한 도도부현을 눌러 빨간색으로 표시하세요.</div>
+</header>
+<main>
+  <section class="stats">
+    <div style="flex:1">
+      <div class="small">방문한 도도부현</div>
+      <div class="count"><span id="count">0</span> <span style="font-size:14px;color:#777;font-weight:500">/ 47</span></div>
+      <div class="progress"><div id="bar"></div></div>
+    </div>
+    <div style="font-size:26px">🗾</div>
+  </section>
+  <div id="map" aria-label="일본 도도부현 지도"></div>
+  <div class="map-note">
+    <span><i class="dot white"></i>미방문</span>
+    <span><i class="dot red"></i>방문 완료</span>
+    <span>두 손가락으로 확대·축소 가능</span>
+  </div>
+  <div id="loadError" hidden class="error"></div>
+  <section class="panel">
+    <div class="small">선택한 지역</div>
+    <div id="selectedName" class="selected-name">지도에서 지역을 선택하세요</div>
+    <div id="selectedSub" class="selected-sub">지역을 누르면 한국어와 일본어 이름이 표시됩니다.</div>
+    <div class="actions">
+      <button id="toggle" disabled>방문 완료로 표시</button>
+      <button id="reset" type="button">전체 초기화</button>
+    </div>
+  </section>
+  <section class="panel">
+    <div style="font-weight:700">방문한 지역</div>
+    <div id="visitedList" class="empty">아직 기록한 지역이 없습니다.</div>
+  </section>
+</main>
+<footer>
+  방문 기록은 이 브라우저의 로컬 저장소에 저장됩니다.<br>
+  Safari의 웹사이트 데이터 삭제 시 기록이 사라질 수 있습니다.<br>
+  지도 데이터: kyodo-official/japan-choropleth (GitHub) · 지도 데이터의 라이선스와 출처는 원본 저장소를 확인하세요.
+</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+  const PREFS = [
+    ["01","北海道","홋카이도"],["02","青森県","아오모리현"],["03","岩手県","이와테현"],["04","宮城県","미야기현"],
+    ["05","秋田県","아키타현"],["06","山形県","야마가타현"],["07","福島県","후쿠시마현"],["08","茨城県","이바라키현"],
+    ["09","栃木県","도치기현"],["10","群馬県","군마현"],["11","埼玉県","사이타마현"],["12","千葉県","지바현"],
+    ["13","東京都","도쿄도"],["14","神奈川県","가나가와현"],["15","新潟県","니가타현"],["16","富山県","도야마현"],
+    ["17","石川県","이시카와현"],["18","福井県","후쿠이현"],["19","山梨県","야마나시현"],["20","長野県","나가노현"],
+    ["21","岐阜県","기후현"],["22","静岡県","시즈오카현"],["23","愛知県","아이치현"],["24","三重県","미에현"],
+    ["25","滋賀県","시가현"],["26","京都府","교토부"],["27","大阪府","오사카부"],["28","兵庫県","효고현"],
+    ["29","奈良県","나라현"],["30","和歌山県","와카야마현"],["31","鳥取県","돗토리현"],["32","島根県","시마네현"],
+    ["33","岡山県","오카야마현"],["34","広島県","히로시마현"],["35","山口県","야마구치현"],["36","徳島県","도쿠시마현"],
+    ["37","香川県","가가와현"],["38","愛媛県","에히메현"],["39","高知県","고치현"],["40","福岡県","후쿠오카현"],
+    ["41","佐賀県","사가현"],["42","長崎県","나가사키현"],["43","熊本県","구마모토현"],["44","大分県","오이타현"],
+    ["45","宮崎県","미야자키현"],["46","鹿児島県","가고시마현"],["47","沖縄県","오키나와현"]
+  ];
+  const byJp = new Map(PREFS.map(p => [p[1], p]));
+  const byCode = new Map(PREFS.map(p => [String(Number(p[0])), p]));
+  const STORAGE_KEY = "japan-trip-map-visited-v1";
+  let visited = new Set();
+  let selected = null;
+  let layerByCode = new Map();
+  const map = L.map("map", { zoomControl:true, attributionControl:true, tap:true, minZoom:2 }).setView([36.2, 138.2], 4);
+  // No external basemap tiles are used; the prefecture shapes themselves form the map.
+  L.control.scale({ imperial:false, metric:true }).addTo(map);
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    if (Array.isArray(saved)) visited = new Set(saved.filter(x => PREFS.some(p => p[0] === x)));
+  } catch (_) { visited = new Set(); }
+
+  const jpToKo = Object.fromEntries(PREFS.map(p => [p[1], p[2]]));
+
+  function identify(feature) {
+    const props = feature && feature.properties ? feature.properties : {};
+    const values = [feature && feature.id, ...Object.values(props)].filter(v => v !== null && v !== undefined).map(v => String(v));
+    // Prefer a Japanese prefecture name found in the feature properties.
+    for (const v of values) {
+      for (const p of PREFS) if (v === p[1] || v.includes(p[1])) return p;
+    }
+    // Fallback to common prefecture-code property names.
+    for (const [k,v] of Object.entries(props)) {
+      if (/code|jis|pref|id|行政|都道府県/i.test(k)) {
+        const digits = String(v).match(/\d{1,2}/);
+        if (digits) {
+          const p = byCode.get(String(Number(digits[0])));
+          if (p) return p;
+        }
+      }
+    }
+    if (feature && feature.id !== undefined) {
+      const digits = String(feature.id).match(/\d{1,2}/);
+      if (digits) return byCode.get(String(Number(digits[0]))) || null;
+    }
+    return null;
+  }
+
+  function styleFor(p) {
+    const isVisited = visited.has(p[0]);
+    return { color:"#62666b", weight:1, opacity:1, fillColor:isVisited ? "#e53935" : "#ffffff", fillOpacity:1 };
+  }
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...visited])); }
+    catch (_) { alert("저장 공간에 기록하지 못했어요. Safari 설정을 확인해 주세요."); }
+  }
+  function renderStats() {
+    document.getElementById("count").textContent = visited.size;
+    document.getElementById("bar").style.width = (visited.size / 47 * 100) + "%";
+    const list = document.getElementById("visitedList");
+    const items = PREFS.filter(p => visited.has(p[0]));
+    list.className = items.length ? "" : "empty";
+    list.innerHTML = "";
+    if (!items.length) { list.textContent = "아직 기록한 지역이 없습니다."; return; }
+    items.forEach(p => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.type = "button"; b.textContent = p[2] + " · " + p[1];
+      b.addEventListener("click", () => selectPref(p));
+      list.appendChild(b);
+    });
+  }
+  function updateFeature(p) {
+    const layer = layerByCode.get(p[0]);
+    if (layer) layer.setStyle(styleFor(p));
+  }
+  function selectPref(p) {
+    selected = p;
+    document.getElementById("selectedName").textContent = p[2];
+    document.getElementById("selectedSub").textContent = p[1] + " · " + (visited.has(p[0]) ? "방문 완료" : "아직 방문하지 않음");
+    const btn = document.getElementById("toggle");
+    btn.disabled = false;
+    btn.textContent = visited.has(p[0]) ? "방문 기록 해제" : "방문 완료로 표시";
+    btn.style.background = visited.has(p[0]) ? "#555b62" : "#e53935";
+    layerByCode.forEach((layer, code) => {
+      const pref = PREFS.find(x => x[0] === code);
+      if (pref) layer.setStyle({ weight: code === p[0] ? 2.5 : 1, color: code === p[0] ? "#222" : "#62666b" });
+    });
+  }
+
+  document.getElementById("toggle").addEventListener("click", () => {
+    if (!selected) return;
+    if (visited.has(selected[0])) visited.delete(selected[0]); else visited.add(selected[0]);
+    save();
+    layerByCode.forEach((layer, code) => {
+      const p = PREFS.find(x => x[0] === code);
+      if (p) layer.setStyle(styleFor(p));
+    });
+    selectPref(selected);
+    renderStats();
+  });
+  document.getElementById("reset").addEventListener("click", () => {
+    if (!confirm("방문 기록  " + visited.size + "개를 모두 삭제할까요?")) return;
+    visited.clear(); save();
+    layerByCode.forEach((layer, code) => {
+      const p = PREFS.find(x => x[0] === code);
+      if (p) layer.setStyle(styleFor(p));
+    });
+    if (selected) selectPref(selected);
+    renderStats();
+  });
+
+  const geojsonUrl = "https://raw.githubusercontent.com/kyodo-official/japan-choropleth/main/data/geojson/prefectures.geojson";
+  fetch(geojsonUrl)
+    .then(r => { if (!r.ok) throw new Error("지도 데이터를 가져오지 못했습니다 (" + r.status + ")."); return r.json(); })
+    .then(data => {
+      let matched = 0;
+      const geoLayer = L.geoJSON(data, {
+        style: feature => {
+          const p = identify(feature);
+          return p ? styleFor(p) : { color:"#777", weight:1, fillColor:"#fff", fillOpacity:1 };
+        },
+        onEachFeature: (feature, layer) => {
+          const p = identify(feature);
+          if (!p) return;
+          if (layerByCode.has(p[0])) return;
+          layerByCode.set(p[0], layer); matched++;
+          layer.on("click", () => selectPref(p));
+          layer.bindTooltip(p[2] + " · " + p[1], { sticky:true, direction:"auto", className:"pref-label" });
+        }
+      }).addTo(map);
+      if (matched < 47) {
+        document.getElementById("loadError").hidden = false;
+        document.getElementById("loadError").textContent = "지도를 불러왔지만 지역을 " + matched + "개만 인식했어요. 데이터 형식이 바뀌었을 수 있어요.";
+      }
+      const bounds = geoLayer.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { padding:[8,8] });
+      renderStats();
+    })
+    .catch(err => {
+      const el = document.getElementById("loadError");
+      el.hidden = false;
+      el.textContent = "지도를 불러오지 못했어요. 인터넷 연결을 확인하거나 잠시 후 다시 열어 주세요. (" + err.message + ")";
+    });
+
+  renderStats();
+})();
+</script>
+</body>
+</html>
